@@ -239,7 +239,7 @@ Nouvelle question:
     # Composants
     conversational_rag.add_component("memory_retriever", memory_retriever)
     conversational_rag.add_component("query_rephrase_prompt_builder", PromptBuilder(query_rephrase_template))
-    conversational_rag.add_component("query_rephrase_llm", OpenAIGenerator(model="gpt-4o-mini"))
+    conversational_rag.add_component("query_rephrase_llm", OpenAIGenerator(model="gpt-4o", generation_kwargs={"n": 1, "temperature": 0.21, "max_tokens": 7000}))
     conversational_rag.add_component("list_to_str_adapter", OutputAdapter(template="{{ replies[0] }}", output_type=str))
 
     # Embedding
@@ -256,10 +256,14 @@ Nouvelle question:
     conversational_rag.add_component("retriever_patient", retriever_patient)
     conversational_rag.add_component("retriever_knowledge", retriever_knowledge)
     conversational_rag.add_component("documents_joiner", ListJoiner(Document))
+    conversational_rag.add_component("hyde_generator", OpenAIGenerator(model="gpt-4o", generation_kwargs={"n": 1, "temperature": 0.21, "max_tokens": 7000}))
+    conversational_rag.add_component("hyde_output_adapter", OutputAdapter(template="{{ replies[0] }}", output_type=str))
+
+
 
     # Prompt builder + LLM
     conversational_rag.add_component("prompt_builder", ChatPromptBuilder(variables=["query", "documents", "memories"], required_variables=["query", "documents", "memories"]))
-    conversational_rag.add_component("llm", OpenAIChatGenerator(model="gpt-4o"))
+    conversational_rag.add_component("llm", OpenAIChatGenerator(model="gpt-4o", generation_kwargs={"n": 1, "temperature": 0.21, "max_tokens": 7000}))
 
     # Memory writing
     conversational_rag.add_component("memory_writer", memory_writer)
@@ -270,7 +274,17 @@ Nouvelle question:
     conversational_rag.connect("memory_retriever", "query_rephrase_prompt_builder.memories")
     conversational_rag.connect("query_rephrase_prompt_builder.prompt", "query_rephrase_llm")
     conversational_rag.connect("query_rephrase_llm.replies", "list_to_str_adapter")
-    conversational_rag.connect("list_to_str_adapter", "query_embedding_generator.text")
+    #conversational_rag.connect("list_to_str_adapter", "query_embedding_generator.text")
+
+    # Générer un passage hypothétique à partir de la requête reformulée
+    conversational_rag.connect("list_to_str_adapter", "hyde_generator.prompt")
+
+    # Adapter la sortie du HyDE pour qu'elle soit une chaîne unique
+    conversational_rag.connect("hyde_generator.replies", "hyde_output_adapter")
+
+    # Envoyer la version enrichie à l'embedding
+    conversational_rag.connect("hyde_output_adapter", "query_embedding_generator.text")
+
 
     # Retrieve
     conversational_rag.connect("query_embedding_generator.embedding", "retriever_patient.query_embedding")
