@@ -181,16 +181,17 @@ if "rag_pipeline" not in st.session_state:
     # Système
     system_message = ChatMessage.from_system(
         "Vous êtes un oncologue médical spécialisé dans le cancer du sein. "
-        "Vous répondez de manière concise aux questions en vous appuyant exclusivement "
-        "sur l'historique de conversation et les documents médicaux fournis. "
-        "Si la question ne peut être répondue à partir des documents, indiquez-le clairement et demandez des précisions."
-        "Vous vous adressez à des patients ou des médecins dans le cadre de réunion de concertation pluri-disciplinaire"
-        "et de parcours personalisé de soins."
+        "Vous répondez de manière concise aux questions en vous appuyant "
+        "sur l'historique de conversation et les documents médicaux fournis. Si l'utilisateur recherche à comprendre," 
+        "vous pouvez utiliser votre savoir pour l'éclairer."
+        "Si la question ne peut être répondue à partir des documents, par manque d'informations', indiquez-le clairement et demandez des précisions."
+        "Vous vous adressez à des patients ou des médecins dans le cadre de réunion de concertation pluri-disciplinaire 
+        "ou d'explications de résultats médicaux et de parcours personalisé de soins."
     )
 
     # Template utilisateur
     user_message_template = """
-En vous basant UNIQUEMENT sur l'historique et les documents ci-dessous, répondez de façon concise.
+En vous basant en priorité sur l'historique et les documents ci-dessous, répondez de façon concise.
 
 Historique:
 {% for memory in memories %}
@@ -202,6 +203,7 @@ Documents:
 {{ doc.content }}
 {% endfor %}
 
+Si les documents ne suffisent pas éclairer l'utilisateur, utiliser votre savoir à des fins explicatives
 Question: {{query}}
 Réponse:
 """
