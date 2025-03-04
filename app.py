@@ -276,7 +276,7 @@ Nouvelle question reformulée :
     # Composants
     conversational_rag.add_component("memory_retriever", memory_retriever)
     conversational_rag.add_component("query_rephrase_prompt_builder", PromptBuilder(query_rephrase_template))
-    conversational_rag.add_component("query_rephrase_llm", OpenAIGenerator(model="gpt-4o", generation_kwargs={"n": 1, "temperature": 0.2, "max_tokens": 1000, "response_format": "bullet_points"}))
+    conversational_rag.add_component("query_rephrase_llm", OpenAIGenerator(model="gpt-4o", generation_kwargs={"n": 1, "temperature": 0.2, "max_tokens": 1000}))
     conversational_rag.add_component("list_to_str_adapter", OutputAdapter(template="{{ replies[0] }}", output_type=str))
 
     # Embedding
@@ -293,14 +293,14 @@ Nouvelle question reformulée :
     conversational_rag.add_component("retriever_patient", retriever_patient)
     conversational_rag.add_component("retriever_knowledge", retriever_knowledge)
     conversational_rag.add_component("documents_joiner", ListJoiner(Document))
-    conversational_rag.add_component("hyde_generator", OpenAIGenerator(model="gpt-4o", generation_kwargs={"n": 1, "temperature": 0.2, "max_tokens": 1000, "response_format": "bullet_points"}))
+    conversational_rag.add_component("hyde_generator", OpenAIGenerator(model="gpt-4o", generation_kwargs={"n": 1, "temperature": 0.2, "max_tokens": 1000}))
     conversational_rag.add_component("hyde_output_adapter", OutputAdapter(template="{{ replies[0] }}", output_type=str))
 
 
 
     # Prompt builder + LLM
     conversational_rag.add_component("prompt_builder", ChatPromptBuilder(variables=["query", "documents", "memories"], required_variables=["query", "documents", "memories"]))
-    conversational_rag.add_component("llm", OpenAIChatGenerator(model="gpt-4o", generation_kwargs={"n": 1, "temperature": 0.2, "max_tokens": 1000, "response_format": "bullet_points"}))
+    conversational_rag.add_component("llm", OpenAIChatGenerator(model="gpt-4o", generation_kwargs={"n": 1, "temperature": 0.2, "max_tokens": 1000}))
 
     # Memory writing
     conversational_rag.add_component("memory_writer", memory_writer)
