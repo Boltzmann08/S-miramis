@@ -40,6 +40,7 @@ def extract_images_from_pdf(pdf_path, output_folder):
     os.makedirs(output_folder, exist_ok=True)
     try:
         doc = fitz.open(pdf_path)
+        image_paths = []
     except Exception as e:
         st.error("Le fichier PDF est corrompu ou invalide.")
         st.stop()
