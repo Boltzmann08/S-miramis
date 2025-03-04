@@ -240,7 +240,7 @@ Réponse :
     query_rephrase_template = """
 Réécrivez la question de manière à ce qu'elle guide la recherche vers une recommandation thérapeutique en cancérologie du sein, 
 en prenant en compte les informations clés des documents patients (TNM, HER2, RH, RE, Ki67, taille tumorale, état ganglionnaire).
-La nouvelle question doit mener à une réponse sous forme de protocole détaillé et exploitable immédiatement en RCP.
+La nouvelle question doit mener à une réponse sous forme de protocole détaillé et exploitable immédiatement en RCP. Notamment les molécules, la posologie et les durées de traitement. 
 
 Exemples :
 - Question originale : "Quels sont les traitements possibles ?"
