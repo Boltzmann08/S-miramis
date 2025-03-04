@@ -38,8 +38,11 @@ from haystack.components.converters import TextFileToDocument
 def extract_images_from_pdf(pdf_path, output_folder):
     """Extrait chaque page du PDF sous forme d'image."""
     os.makedirs(output_folder, exist_ok=True)
-    doc = fitz.open(pdf_path)
-    image_paths = []
+    try:
+        doc = fitz.open(pdf_path)
+    except Exception as e:
+        st.error("Le fichier PDF est corrompu ou invalide.")
+        st.stop()
 
     for i, page in enumerate(doc):
         pix = page.get_pixmap()
@@ -58,34 +61,37 @@ def encode_image_to_base64(image_path):
 def process_image_with_openai(image_path):
     """Utilise OpenAI Vision API pour extraire et structurer les informations médicales d'une image."""
     image_base64 = encode_image_to_base64(image_path)
-
-    response = openai.chat.completions.create(
-        model="chatgpt-4o-latest",
-        messages=[
-            {"role": "system", "content": "Vous êtes un assistant avancé spécialisé dans l'OCR et la structuration de documents médicaux. Vous êtes un expert en traitement et structuration de documents médicaux. Votre tâche est d’extraire, organiser et structurer les informations contenues dans le document fourni de manière rigoureuse et exploitable dans un pipeline RAG."},
-            {"role": "user", "content": [
-                {"type": "text", "text": "### Consignes d'extraction et de structuration :" 
-                 "1.Extraire l'intégralité des données" "médicales sans altération ni omission."
-                 "2..Structurer les informations sous forme de texte clair et segmenté avec des titres et sous-titres explicites."
-                 "3.Distinguer et organiser les sections suivantes si elles sont présentes dans le document exemple:"
-                 "a.Informations Générales du Patient : Nom, âge, sexe, antécédents médicaux, traitements en cours."
-                 "b.Motif de Consultation : Raisons du rendez-vous, symptômes rapportés."
-                 "c.Compte-Rendu Médical : Examens cliniques, résultats d’imageries, bilans biologiques."
-                 "d.Diagnostic : Résumé du diagnostic, stade de la maladie, score TNM si applicable."
-                 "e.Traitements et Recommandations : Protocole de soins, traitements médicamenteux, décisions prises en réunion"
-                 "pluridisciplinaire."
-                 "f.Pronostic et Suivi : Recommandations à court et long terme, examens à programmer."
-                 "g.Autres Notes Importantes : Informations pertinentes non catégorisables."
-                 "4. Préciser l'anapathomologie et la biologie moléculaire (HER2, RH, RE)"
-                 "5.Mettre en évidence les seuils cliniques, recommandations prioritaires et termes médicaux clés en utilisant de"
-                 "puces ou des paragraphes explicites."
-                 "6.Veiller à une structuration cohérente et uniforme pour garantir l’extraction complète et précise des données" 
-                 "exploitables par un système de RAG."},
-                {"type": "image_url", "image_url": f"data:image/png;base64,{image_base64}"}
-            ]}
-        ],
-        max_tokens=15000
-    )
+    try :
+        response = openai.chat.completions.create(
+            model="chatgpt-4o-latest",
+            messages=[
+                {"role": "system", "content": "Vous êtes un assistant avancé spécialisé dans l'OCR et la structuration de documents médicaux. Vous êtes un expert en traitement et structuration de documents médicaux. Votre tâche est d’extraire, organiser et structurer les informations contenues dans le document fourni de manière rigoureuse et exploitable dans un pipeline RAG."},
+                {"role": "user", "content": [
+                    {"type": "text", "text": "### Consignes d'extraction et de structuration :" 
+                     "1.Extraire l'intégralité des données" "médicales sans altération ni omission."
+                     "2..Structurer les informations sous forme de texte clair et segmenté avec des titres et sous-titres explicites."
+                     "3.Distinguer et organiser les sections suivantes si elles sont présentes dans le document exemple:"
+                     "a.Informations Générales du Patient : Nom, âge, sexe, antécédents médicaux, traitements en cours."
+                     "b.Motif de Consultation : Raisons du rendez-vous, symptômes rapportés."
+                     "c.Compte-Rendu Médical : Examens cliniques, résultats d’imageries, bilans biologiques."
+                     "d.Diagnostic : Résumé du diagnostic, stade de la maladie, score TNM si applicable."
+                     "e.Traitements et Recommandations : Protocole de soins, traitements médicamenteux, décisions prises en réunion"
+                     "pluridisciplinaire."
+                     "f.Pronostic et Suivi : Recommandations à court et long terme, examens à programmer."
+                     "g.Autres Notes Importantes : Informations pertinentes non catégorisables."
+                     "4. Préciser l'anapathomologie et la biologie moléculaire (HER2, RH, RE)"
+                     "5.Mettre en évidence les seuils cliniques, recommandations prioritaires et termes médicaux clés en utilisant de"
+                     "puces ou des paragraphes explicites."
+                     "6.Veiller à une structuration cohérente et uniforme pour garantir l’extraction complète et précise des données" 
+                     "exploitables par un système de RAG."},
+                    {"type": "image_url", "image_url": f"data:image/png;base64,{image_base64}"}
+                ]}
+            ],
+            max_tokens=15000
+        )
+    except openai.error.OpenAIError as e:
+        st.error(f"Erreur OpenAI : {str(e)}")
+        
     return response.choices[0].message.content
 
 
@@ -180,14 +186,21 @@ if "rag_pipeline" not in st.session_state:
 
     # Système
     system_message = ChatMessage.from_system(
-        "Vous êtes un oncologue médical spécialisé dans le cancer du sein. "
-        "Vous répondez de manière concise aux questions en vous appuyant "
-        "sur l'historique de conversation et les documents médicaux fournis. Si l'utilisateur recherche à comprendre," 
-        "vous pouvez utiliser votre savoir pour l'éclairer."
-        "Si la question ne peut être répondue à partir des documents, par manque d'informations', indiquez-le clairement et demandez des précisions."
-        "Vous vous adressez à des patients ou des médecins dans le cadre de réunion de concertation pluri-disciplinaire" 
-        "ou d'explications de résultats médicaux et de parcours personalisé de soins."
-    )
+    "Vous êtes un oncologue médical spécialisé dans le cancer du sein. "
+    "Vous répondez de manière concise aux questions en vous appuyant UNIQUEMENT "
+    "sur l'historique de conversation et les documents fournis. "
+    "Si la question ne peut être répondue à partir des documents, par manque d'informations, indiquez-le clairement et demandez des précisions. "
+    "Vous vous adressez à des médecins dans le cadre de réunion de concertation pluri-disciplinaire cancer du sein"
+    "### IMPORTANT : Si les informations médicales du patient sont présentes, proposez une stratégie thérapeutique adaptée :"
+    "- Chirurgie (technique recommandée selon le TNM et l’atteinte ganglionnaire)"
+    "- Chimiothérapie (indications, molécules, posologie)"
+    "- Hormonothérapie (si applicable, avec durée)"
+    "- Radiothérapie (si applicable)"
+    "- Thérapies ciblées (trastuzumab, inhibiteurs CDK4/6, etc.)"
+    "- Suivi médical post-thérapeutique"
+    "Justifiez chaque recommandation selon les guidelines en vigueur (HAS, ESMO, NCCN)."
+)
+
 
     # Template utilisateur
     user_message_template = """
@@ -203,22 +216,38 @@ Documents:
 {{ doc.content }}
 {% endfor %}
 
-Si les documents ne suffisent pas éclairer l'utilisateur, utiliser votre savoir à des fins explicatives
-Question: {{query}}
-Réponse:
+Si les documents ne suffisent pas à éclairer l'utilisateur, utilisez votre savoir à des fins explicatives.
+
+### Recommandation thérapeutique :
+Si les documents incluent des données cliniques du patient, proposez un plan de traitement personnalisé :
+1. **Chirurgie** : Technique indiquée selon les données tumorales.
+2. **Chimiothérapie** : Protocole à suivre, molécules, durée.
+3. **Hormonothérapie** : Indications et durée.
+4. **Radiothérapie** : Indications et zones à irradier.
+5. **Thérapies ciblées** : Utilisation de traitements spécifiques.
+6. **Suivi médical** : Contrôles et réévaluations.
+
+Question : {{query}}
+
+Réponse :
 """
+
     user_message = ChatMessage.from_user(user_message_template)
 
     # Prompt de reformulation
     query_rephrase_template = """
-Réécrivez la question afin qu’elle soit adaptée à la recherche documentaire médicale,
-sans en changer le sens ni les mots-clés médicaux essentiels. N'hésitez pas à demander
-le statut des récepteurs hormonaux, le TNM et la taille de la tumeur si non fourni par l'utilisateur.
+Réécrivez la question de manière à ce qu'elle guide la recherche vers une recommandation thérapeutique en cancérologie du sein, 
+en prenant en compte les informations clés des documents patients (TNM, HER2, RH, RE, Ki67, taille tumorale, état ganglionnaire).
 
-Exemple:
-- Historique: ["Le patient veut plus de précisions"]
-- Question originale: "Quels sont les risques de la chimiothérapie pour mon cancer ?"
-- Question reformulée: "Risques de la chimiothérapie dans le traitement du cancer"
+Exemples :
+- Question originale : "Quels sont les traitements possibles ?"
+- Question reformulée : "En fonction du statut TNM et des marqueurs tumoraux, quelles options thérapeutiques sont recommandées ?"
+
+- Question originale : "Faut-il une chimio pour ce patient ?"
+- Question reformulée : "À partir des caractéristiques tumorales et des recommandations actuelles, la chimiothérapie est-elle indiquée ?"
+
+- Question originale : "Quelle chirurgie proposer ?"
+- Question reformulée : "D'après la taille tumorale, l'atteinte ganglionnaire et les recommandations, quelle approche chirurgicale est la plus adaptée ?"
 
 Historique:
 {% for memory in memories %}
@@ -227,9 +256,9 @@ Historique:
 
 Question: {{query}}
 
-Nouvelle question:
-
+Nouvelle question reformulée :
 """
+
 
     memory_store = st.session_state.memory_store
     memory_retriever = ChatMessageRetriever(memory_store)
@@ -241,7 +270,7 @@ Nouvelle question:
     # Composants
     conversational_rag.add_component("memory_retriever", memory_retriever)
     conversational_rag.add_component("query_rephrase_prompt_builder", PromptBuilder(query_rephrase_template))
-    conversational_rag.add_component("query_rephrase_llm", OpenAIGenerator(model="gpt-4o", generation_kwargs={"n": 1, "temperature": 0.21, "max_tokens": 7000}))
+    conversational_rag.add_component("query_rephrase_llm", OpenAIGenerator(model="gpt-4o", generation_kwargs={"n": 1, "temperature": 0.2, "max_tokens": 7000}))
     conversational_rag.add_component("list_to_str_adapter", OutputAdapter(template="{{ replies[0] }}", output_type=str))
 
     # Embedding
@@ -258,14 +287,14 @@ Nouvelle question:
     conversational_rag.add_component("retriever_patient", retriever_patient)
     conversational_rag.add_component("retriever_knowledge", retriever_knowledge)
     conversational_rag.add_component("documents_joiner", ListJoiner(Document))
-    conversational_rag.add_component("hyde_generator", OpenAIGenerator(model="gpt-4o", generation_kwargs={"n": 1, "temperature": 0.21, "max_tokens": 7000}))
+    conversational_rag.add_component("hyde_generator", OpenAIGenerator(model="gpt-4o", generation_kwargs={"n": 1, "temperature": 0.2, "max_tokens": 7000}))
     conversational_rag.add_component("hyde_output_adapter", OutputAdapter(template="{{ replies[0] }}", output_type=str))
 
 
 
     # Prompt builder + LLM
     conversational_rag.add_component("prompt_builder", ChatPromptBuilder(variables=["query", "documents", "memories"], required_variables=["query", "documents", "memories"]))
-    conversational_rag.add_component("llm", OpenAIChatGenerator(model="gpt-4o", generation_kwargs={"n": 1, "temperature": 0.21, "max_tokens": 7000}))
+    conversational_rag.add_component("llm", OpenAIChatGenerator(model="gpt-4o", generation_kwargs={"n": 1, "temperature": 0.2, "max_tokens": 7000}))
 
     # Memory writing
     conversational_rag.add_component("memory_writer", memory_writer)
