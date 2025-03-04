@@ -185,7 +185,7 @@ if "rag_pipeline" not in st.session_state:
         "sur l'historique de conversation et les documents médicaux fournis. Si l'utilisateur recherche à comprendre," 
         "vous pouvez utiliser votre savoir pour l'éclairer."
         "Si la question ne peut être répondue à partir des documents, par manque d'informations', indiquez-le clairement et demandez des précisions."
-        "Vous vous adressez à des patients ou des médecins dans le cadre de réunion de concertation pluri-disciplinaire 
+        "Vous vous adressez à des patients ou des médecins dans le cadre de réunion de concertation pluri-disciplinaire" 
         "ou d'explications de résultats médicaux et de parcours personalisé de soins."
     )
 
