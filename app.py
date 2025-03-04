@@ -181,7 +181,7 @@ if "rag_pipeline" not in st.session_state:
 
     st.session_state["knowledge_document_store"] = knowledge_document_store
 
-    # Création d'un document store unique pour le patient
+    # Création d'un document store unique pour le patient et unique pour la session
     create_new_patient_document_store()
 
     # Système
@@ -189,22 +189,22 @@ if "rag_pipeline" not in st.session_state:
     "Vous êtes un oncologue médical spécialisé dans le cancer du sein. "
     "Vous répondez de manière concise aux questions en vous appuyant UNIQUEMENT "
     "sur l'historique de conversation et les documents fournis. "
-    "Si la question ne peut être répondue à partir des documents, par manque d'informations, indiquez-le clairement et demandez des précisions. "
+    "Si les informations sont insuffisantes, demandez uniquement les éléments manquants nécessaires à une décision thérapeutique"
     "Vous vous adressez à des médecins dans le cadre de réunion de concertation pluri-disciplinaire cancer du sein"
     "### IMPORTANT : Si les informations médicales du patient sont présentes, proposez une stratégie thérapeutique adaptée :"
     "- Chirurgie (technique recommandée selon le TNM et l’atteinte ganglionnaire)"
-    "- Chimiothérapie (indications, molécules, posologie)"
-    "- Hormonothérapie (si applicable, avec durée)"
+    "- Chimiothérapie (indications, molécules, POSOLOGIE)"
+    "- Hormonothérapie (si applicable, POSOLOGIE, avec durée)"
     "- Radiothérapie (si applicable)"
-    "- Thérapies ciblées (trastuzumab, inhibiteurs CDK4/6, etc.)"
+    "- Thérapies ciblées (trastuzumab, inhibiteurs CDK4/6, etc., POSOLOGIE et DUREE)"
     "- Suivi médical post-thérapeutique"
-    "Justifiez chaque recommandation selon les guidelines en vigueur (HAS, ESMO, NCCN)."
+    "Ne donnez pas d’avertissements, de conditionnels ou de recommandations générales. Soyez direct et précis."
 )
 
 
     # Template utilisateur
     user_message_template = """
-En vous basant en priorité sur l'historique et les documents ci-dessous, répondez de façon concise.
+En vous basant en PRIORITE sur l'historique et les documents ci-dessous, répondez avec un vocabulaire médicale :
 
 Historique:
 {% for memory in memories %}
@@ -216,16 +216,17 @@ Documents:
 {{ doc.content }}
 {% endfor %}
 
-Si les documents ne suffisent pas à éclairer l'utilisateur, utilisez votre savoir à des fins explicatives.
 
 ### Recommandation thérapeutique :
-Si les documents incluent des données cliniques du patient, proposez un plan de traitement personnalisé :
+Si les documents incluent des données cliniques du patient, donnez directement une stratégie thérapeutique précise sans précaution de langage. :
 1. **Chirurgie** : Technique indiquée selon les données tumorales.
-2. **Chimiothérapie** : Protocole à suivre, molécules, durée.
-3. **Hormonothérapie** : Indications et durée.
+2. **Chimiothérapie** : Protocole à suivre, molécules, POSOLOGIE et durée.
+3. **Hormonothérapie** : Indications, POSOLOGIE et durée.
 4. **Radiothérapie** : Indications et zones à irradier.
 5. **Thérapies ciblées** : Utilisation de traitements spécifiques.
 6. **Suivi médical** : Contrôles et réévaluations.
+
+Ne mentionnez pas que ces recommandations doivent être discutées en RCP
 
 Question : {{query}}
 
@@ -238,13 +239,17 @@ Réponse :
     query_rephrase_template = """
 Réécrivez la question de manière à ce qu'elle guide la recherche vers une recommandation thérapeutique en cancérologie du sein, 
 en prenant en compte les informations clés des documents patients (TNM, HER2, RH, RE, Ki67, taille tumorale, état ganglionnaire).
+La nouvelle question doit mener à une réponse sous forme de protocole détaillé et exploitable immédiatement en RCP.
 
 Exemples :
 - Question originale : "Quels sont les traitements possibles ?"
 - Question reformulée : "En fonction du statut TNM et des marqueurs tumoraux, quelles options thérapeutiques sont recommandées ?"
 
+- Question originale : "Quel traitement pour ce patient ?"
+- Question reformulée :"D’après TNM, RH, HER2, KI67, quelle est la stratégie thérapeutique optimale, en détaillant posologie et durée ?"
+
 - Question originale : "Faut-il une chimio pour ce patient ?"
-- Question reformulée : "À partir des caractéristiques tumorales et des recommandations actuelles, la chimiothérapie est-elle indiquée ?"
+- Question reformulée : "À partir des caractéristiques tumorales et des recommandations actuelles, la chimiothérapie est-elle indiquée, si oui POSOLOGIE et DUREE?"
 
 - Question originale : "Quelle chirurgie proposer ?"
 - Question reformulée : "D'après la taille tumorale, l'atteinte ganglionnaire et les recommandations, quelle approche chirurgicale est la plus adaptée ?"
@@ -270,7 +275,7 @@ Nouvelle question reformulée :
     # Composants
     conversational_rag.add_component("memory_retriever", memory_retriever)
     conversational_rag.add_component("query_rephrase_prompt_builder", PromptBuilder(query_rephrase_template))
-    conversational_rag.add_component("query_rephrase_llm", OpenAIGenerator(model="gpt-4o", generation_kwargs={"n": 1, "temperature": 0.2, "max_tokens": 7000}))
+    conversational_rag.add_component("query_rephrase_llm", OpenAIGenerator(model="gpt-4o", generation_kwargs={"n": 1, "temperature": 0.2, "max_tokens": 1000, "response_format": "bullet_points"}))
     conversational_rag.add_component("list_to_str_adapter", OutputAdapter(template="{{ replies[0] }}", output_type=str))
 
     # Embedding
@@ -287,14 +292,14 @@ Nouvelle question reformulée :
     conversational_rag.add_component("retriever_patient", retriever_patient)
     conversational_rag.add_component("retriever_knowledge", retriever_knowledge)
     conversational_rag.add_component("documents_joiner", ListJoiner(Document))
-    conversational_rag.add_component("hyde_generator", OpenAIGenerator(model="gpt-4o", generation_kwargs={"n": 1, "temperature": 0.2, "max_tokens": 7000}))
+    conversational_rag.add_component("hyde_generator", OpenAIGenerator(model="gpt-4o", generation_kwargs={"n": 1, "temperature": 0.2, "max_tokens": 1000, "response_format": "bullet_points"}))
     conversational_rag.add_component("hyde_output_adapter", OutputAdapter(template="{{ replies[0] }}", output_type=str))
 
 
 
     # Prompt builder + LLM
     conversational_rag.add_component("prompt_builder", ChatPromptBuilder(variables=["query", "documents", "memories"], required_variables=["query", "documents", "memories"]))
-    conversational_rag.add_component("llm", OpenAIChatGenerator(model="gpt-4o", generation_kwargs={"n": 1, "temperature": 0.2, "max_tokens": 7000}))
+    conversational_rag.add_component("llm", OpenAIChatGenerator(model="gpt-4o", generation_kwargs={"n": 1, "temperature": 0.2, "max_tokens": 1000, "response_format": "bullet_points"}))
 
     # Memory writing
     conversational_rag.add_component("memory_writer", memory_writer)
