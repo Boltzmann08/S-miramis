@@ -170,6 +170,28 @@ if "memory_store" not in st.session_state or st.session_state.reset_chat:
 if "patient_document_store" not in st.session_state:
     create_new_patient_document_store()
 
+
+######################################
+# Amélioration de la récupération des documents (Retriever)
+######################################
+def adjust_top_k(query):
+    """ Ajuste dynamiquement le top_k en fonction de la complexité de la requête."""
+    keywords = ["TNM", "HER2", "RH", "RE", "Ki67", "stade", "protocole", "traitement", "chirurgie", "thérapie"]
+    complexity_score = sum(1 for word in keywords if word.lower() in query.lower())
+    
+    if complexity_score >= 4:
+        return 5  # Plus de détails, on récupère plus de documents
+    elif complexity_score >= 2:
+        return 3  # Cas standard
+    else:
+        return 2  # Question vague, peu de documents nécessaires
+
+def retrieve_top_documents(retriever, query_embedding, metadata_filters=None, top_k=3):
+    """ Récupération des documents en filtrant sur la pertinence et les métadonnées."""
+    retrieved_docs = retriever.run(query_embedding=query_embedding, filters=metadata_filters, top_k=top_k)
+    return sorted(retrieved_docs['documents'], key=lambda x: x.score, reverse=True)
+
+
 ##################################
 # Pipeline Setup
 ##################################
@@ -205,7 +227,7 @@ if "rag_pipeline" not in st.session_state:
 
     # Template utilisateur
     user_message_template = """
-En vous basant en PRIORITE sur l'historique et les documents ci-dessous, répondez avec un vocabulaire médicale :
+En vous basant en PRIORITE sur l'historique et les documents ci-dessous, fournissez une réponse EXPLOITABLE immédiatement en RCP.
 
 Historique:
 {% for memory in memories %}
@@ -217,17 +239,15 @@ Documents:
 {{ doc.content }}
 {% endfor %}
 
+### Stratégie thérapeutique recommandée :
+1. **Chirurgie** : Technique recommandée selon TNM et atteinte ganglionnaire.
+2. **Chimiothérapie** : Protocole précis (molécules, posologie, durée).
+3. **Hormonothérapie** : Indications et posologie détaillée.
+4. **Radiothérapie** : Zones à irradier et indications spécifiques.
+5. **Thérapies ciblées** : Molécules spécifiques, posologie et durée.
+6. **Suivi médical** : Contrôles et réévaluations précises.
 
-### Recommandation thérapeutique :
-Si les documents incluent des données cliniques du patient, donnez directement une stratégie thérapeutique précise sans précaution de langage. :
-1. **Chirurgie** : Technique indiquée selon les données tumorales.
-2. **Chimiothérapie** : Protocole à suivre, molécules, POSOLOGIE et durée.
-3. **Hormonothérapie** : Indications, POSOLOGIE et durée.
-4. **Radiothérapie** : Indications et zones à irradier.
-5. **Thérapies ciblées** : Utilisation de traitements spécifiques.
-6. **Suivi médical** : Contrôles et réévaluations.
-
-Ne mentionnez pas que ces recommandations doivent être discutées en RCP
+Ne mentionnez pas que ces recommandations doivent être discutées en RCP.
 
 Question : {{query}}
 
@@ -238,31 +258,21 @@ Réponse :
 
     # Prompt de reformulation
     query_rephrase_template = """
-Réécrivez la question de manière à ce qu'elle guide la recherche vers une recommandation thérapeutique en cancérologie du sein, 
-en prenant en compte les informations clés des documents patients (TNM, HER2, RH, RE, Ki67, taille tumorale, état ganglionnaire).
-La nouvelle question doit mener à une réponse sous forme de protocole détaillé et exploitable immédiatement en RCP. Notamment les molécules, la posologie et les durées de traitement. 
+Réécrivez la question de manière claire et précise pour optimiser la récupération documentaire en cancérologie du sein.
+Ajoutez des détails cliniques pertinents (TNM, HER2, RH, RE, Ki67) si absents.
 
-Exemples :
-- Question originale : "Quels sont les traitements possibles ?"
-- Question reformulée : "En fonction du statut TNM et des marqueurs tumoraux, quelles options thérapeutiques sont recommandées ?"
-
-- Question originale : "Quel traitement pour ce patient ?"
-- Question reformulée :"D’après TNM, RH, HER2, KI67, quelle est la stratégie thérapeutique optimale, en détaillant posologie et durée ?"
-
-- Question originale : "Faut-il une chimio pour ce patient ?"
-- Question reformulée : "À partir des caractéristiques tumorales et des recommandations actuelles, la chimiothérapie est-elle indiquée, si oui POSOLOGIE et DUREE?"
-
-- Question originale : "Quelle chirurgie proposer ?"
-- Question reformulée : "D'après la taille tumorale, l'atteinte ganglionnaire et les recommandations, quelle approche chirurgicale est la plus adaptée ?"
+Sortie attendue :
+- Reformulez en question ciblée
+- Ajoutez les informations pertinentes en contexte
 
 Historique:
 {% for memory in memories %}
 {{ memory.text }}
 {% endfor %}
 
-Question: {{query}}
+Question originale : {{query}}
 
-Nouvelle question reformulée :
+Nouvelle question optimisée :
 """
 
 
@@ -282,13 +292,16 @@ Nouvelle question reformulée :
     # Embedding
     conversational_rag.add_component("query_embedding_generator", OpenAITextEmbedder(model="text-embedding-3-large"))
 
-    # Retrievers
+    # # Ajustement dynamique de top_k
+    top_k_value = adjust_top_k(st.session_state.get("last_user_query", ""))
+    
+    
     # Vérification : si le document store patient n'existe pas, on en crée un nouveau
     if "patient_document_store" not in st.session_state:
       create_new_patient_document_store()
 
-    retriever_patient = PineconeEmbeddingRetriever(document_store=st.session_state["patient_document_store"], top_k=3)
-    retriever_knowledge = PineconeEmbeddingRetriever(document_store=knowledge_document_store, top_k=3)
+    retriever_patient = PineconeEmbeddingRetriever(document_store=st.session_state["patient_document_store"], top_k=top_k_value)
+    retriever_knowledge = PineconeEmbeddingRetriever(document_store=knowledge_document_store, top_k=top_k_value)
 
     conversational_rag.add_component("retriever_patient", retriever_patient)
     conversational_rag.add_component("retriever_knowledge", retriever_knowledge)
